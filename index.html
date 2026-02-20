@@ -3,90 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>血月数值压力模拟器-整体输出版</title>
+    <title>血月数值压力全景模拟器</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --cyan: #00e5ff; --gold: #ff9f43; --bg: #0f0f0f; --panel: #1a1a1a; }
+        :root { --cyan: #00e5ff; --gold: #ff9f43; --bg: #111; --panel: #1a1a1a; }
         
-        /* 强制允许滚动，适配 Antigravity 侧边栏 */
+        /* 关键：防止侧边栏溢出，允许纵向无限滚动 */
         html, body { 
             background: var(--bg); 
             color: #eee; 
             margin: 0; 
             padding: 0;
-            overflow-y: auto; 
-            font-family: sans-serif;
+            overflow-x: hidden; 
+            overflow-y: auto;
+            font-family: -apple-system, sans-serif;
         }
 
-        .main-scroll-view {
+        /* 缩放容器 */
+        #adaptive-wrapper {
+            transform-origin: top left;
+            transition: transform 0.2s ease-out;
+            width: 100%;
+            min-width: 320px; /* 侧边栏最小预期宽度 */
             padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+            box-sizing: border-box;
         }
 
         .card { 
             background: var(--panel); 
-            padding: 18px; 
+            padding: 15px; 
             border-radius: 12px; 
             border: 1px solid #333;
+            margin-bottom: 15px;
         }
 
-        .control-item { margin-bottom: 20px; }
-        .label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9em; color: #999; }
-        .val-num { color: var(--cyan); font-weight: bold; font-family: 'Courier New', monospace; }
+        h3 { margin: 0 0 12px 0; font-size: 1rem; color: var(--cyan); border-left: 3px solid var(--cyan); padding-left: 8px; }
+
+        .control-group { margin-bottom: 15px; }
+        .label-row { display: flex; justify-content: space-between; font-size: 0.85em; color: #888; margin-bottom: 5px; }
+        .val-num { color: var(--cyan); font-weight: bold; font-family: monospace; }
         input[type=range] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
 
-        /* 数值卡片改用单列或紧凑双列，防止挤压 */
-        .stat-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 12px; 
-            margin-bottom: 15px; 
-        }
-        .stat-box { 
-            background: #000; 
-            padding: 12px; 
-            border-radius: 8px; 
-            border-top: 3px solid var(--cyan); 
-        }
-        .box-title { font-size: 0.7em; color: #666; margin-bottom: 5px; }
-        .box-val { font-size: 1.1em; font-weight: bold; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .stat-box { background: #000; padding: 10px; border-radius: 6px; border-top: 2px solid var(--cyan); }
+        .box-title { font-size: 0.65em; color: #555; text-transform: uppercase; }
+        .box-val { font-size: 1rem; font-weight: bold; margin-top: 3px; }
 
-        .chart-area {
-            background: #000;
-            padding: 10px;
-            border-radius: 8px;
-            height: 320px;
+        .chart-container { 
+            background: #000; 
+            border-radius: 8px; 
+            padding: 10px; 
+            height: 260px; 
             position: relative;
+            border: 1px solid #222;
         }
-        
-        .axis-tag { position: absolute; font-size: 10px; color: #444; font-weight: bold; pointer-events: none; }
+
+        /* 坐标轴标注 */
+        .axis-label { position: absolute; font-size: 9px; color: #444; font-weight: bold; pointer-events: none; }
+        .y-axis-name { transform: rotate(-90deg); left: -25px; top: 45%; }
+        .x-axis-name { bottom: 2px; left: 50%; transform: translateX(-50%); }
     </style>
 </head>
 <body>
 
-<div class="main-scroll-view">
+<div id="adaptive-wrapper">
     <div class="card">
-        <h3 style="margin: 0 0 15px 0; font-size: 1.1em; border-left: 4px solid var(--cyan); padding-left: 10px;">参数控制 (3s / 10次攻击)</h3>
-        
-        <div class="control-item">
+        <h3>实时参数 (3s/10发周期)</h3>
+        <div class="control-group">
             <div class="label-row">血月等级 (L) <span class="val-num" id="lText">0</span></div>
             <input type="range" id="lSlider" min="0" max="300" value="0">
         </div>
-
-        <div class="control-item">
-            <div class="label-row">词缀增伤累计 (%) <span class="val-num" id="bText">0%</span></div>
+        <div class="control-group">
+            <div class="label-row">词缀攻击加成 (%) <span class="val-num" id="bText">0%</span></div>
             <input type="range" id="bSlider" min="0" max="1000" value="0" step="10">
         </div>
-
-        <div class="control-item">
-            <div class="label-row">暴击率 (%) <span class="val-num" id="cText">0%</span></div>
+        <div class="control-group">
+            <div class="label-row">实时暴击率 (%) <span class="val-num" id="cText">0%</span></div>
             <input type="range" id="cSlider" min="0" max="100" value="0">
         </div>
-
-        <div class="control-item">
-            <div class="label-row">怪物数量 (N) <span class="val-num" id="nText">1</span></div>
+        <div class="control-group">
+            <div class="label-row">怪物堆叠数量 (N) <span class="val-num" id="nText">1</span></div>
             <input type="range" id="nSlider" min="1" max="100" value="1">
         </div>
     </div>
@@ -94,34 +90,53 @@
     <div class="card">
         <div class="stat-grid">
             <div class="stat-box">
-                <div class="box-title">单轮攻击总额 (无暴)</div>
-                <div id="atkTotal" class="box-val">-</div>
+                <div class="box-title">周期总攻击 (10发)</div>
+                <div id="atkTotal" class="box-val">1220</div>
             </div>
             <div class="stat-box" style="border-top-color: var(--gold);">
-                <div class="box-title">单轮暴击总额 (全暴)</div>
-                <div id="critTotal" class="box-val">-</div>
+                <div class="box-title">周期全暴击 (10发)</div>
+                <div id="critTotal" class="box-val">2020</div>
             </div>
             <div class="stat-box" style="border-top-color: #fff;">
-                <div class="box-title">单轮整体输出 (3s)</div>
-                <div id="cycleDmg" class="box-val">-</div>
+                <div class="box-title">当前单轮爆发期望</div>
+                <div id="cycleDmg" class="box-val">1220</div>
             </div>
             <div class="stat-box" style="border-top-color: #555;">
-                <div class="box-title">怪物总血量 (HP*N)</div>
-                <div id="totalHp" class="box-val">-</div>
+                <div class="box-title">目标怪物总血量</div>
+                <div id="totalHp" class="box-val">3703</div>
             </div>
         </div>
 
-        <div class="chart-area">
-            <div class="axis-tag" style="transform:rotate(-90deg); left:-30px; top:50%;">数值量级 (Log)</div>
-            <div class="axis-tag" style="bottom:2px; left:50%; transform:translateX(-50%);">血月等级 (L)</div>
+        <div class="chart-container">
+            <div class="axis-label y-axis-name">数值量级 (对数)</div>
+            <div class="axis-label x-axis-name">血月等级 (L)</div>
             <canvas id="mainChart"></canvas>
         </div>
     </div>
     
-    <div style="height: 40px; text-align: center; color: #444; font-size: 0.8em;">向上滑动查看更多</div>
+    <div style="height: 60px;"></div>
 </div>
 
 <script>
+    // --- 自适应缩放脚本 ---
+    function doAdaptive() {
+        const wrapper = document.getElementById('adaptive-wrapper');
+        const winWidth = window.innerWidth;
+        const baseWidth = 380; // 我们设计的基准宽度
+        
+        if (winWidth < baseWidth) {
+            const scale = winWidth / baseWidth;
+            wrapper.style.transform = `scale(${scale})`;
+            wrapper.style.width = (100 / scale) + '%';
+        } else {
+            wrapper.style.transform = 'none';
+            wrapper.style.width = '100%';
+        }
+    }
+    window.addEventListener('resize', doAdaptive);
+    doAdaptive();
+
+    // --- 数值模型脚本 ---
     const lS = document.getElementById('lSlider');
     const bS = document.getElementById('bSlider');
     const cS = document.getElementById('cSlider');
@@ -139,15 +154,15 @@
         data: {
             labels: Array.from({length: 31}, (_, i) => i * 10),
             datasets: [
-                { label: '怪物总HP', data: [], borderColor: '#444', borderWidth: 2, pointRadius: 0 },
-                { label: '单轮整体输出', data: [], borderColor: '#00e5ff', borderWidth: 2, pointRadius: 0 }
+                { label: '怪物HP', data: [], borderColor: '#333', borderWidth: 1.5, pointRadius: 0 },
+                { label: '爆发输出', data: [], borderColor: '#00e5ff', borderWidth: 2, pointRadius: 0 }
             ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             scales: {
-                y: { type: 'logarithmic', grid: { color: '#222' }, ticks: { color: '#555' } },
-                x: { grid: { color: '#222' }, ticks: { color: '#555' } }
+                y: { type: 'logarithmic', grid: { color: '#222' }, ticks: { display: false } },
+                x: { grid: { color: '#222' }, ticks: { color: '#444', font: { size: 9 } } }
             },
             plugins: { legend: { display: false } }
         }
@@ -159,34 +174,28 @@
         const C = parseInt(cS.value) / 100;
         const N = parseInt(nS.value);
 
-        // 1. 基础局内攻击力
+        // 攻击力公式
         const atkIn = 42 + 80 * (1 + B);
-        // 2. 暴击伤害联动
+        // 暴击伤害公式
         const critDmg = 2 * atkIn - 42;
 
-        // 3. 将10次攻击视为一个整体周期 (3s)
-        const atkCycleTotal = atkIn * 10;   // 10次全是普攻
-        const critCycleTotal = critDmg * 10; // 10次全是暴击
-        
-        // 4. 根据当前暴击率得到的单轮(3s)期望总输出
-        const currentCycleDmg = (atkCycleTotal * (1 - C)) + (critCycleTotal * C);
-        
+        // 整体周期计算 (3s内10发总额)
+        const atkCycle = atkIn * 10;
+        const critCycle = critDmg * 10;
+        const currentExp = (atkCycle * (1 - C)) + (critCycle * C);
         const hpTotal = getHP(L) * N;
 
-        // UI 渲染
         document.getElementById('lText').innerText = L;
         document.getElementById('bText').innerText = Math.round(B * 100) + '%';
         document.getElementById('cText').innerText = Math.round(C * 100) + '%';
         document.getElementById('nText').innerText = N;
-
-        document.getElementById('atkTotal').innerText = Math.round(atkCycleTotal).toLocaleString();
-        document.getElementById('critTotal').innerText = Math.round(critCycleTotal).toLocaleString();
-        document.getElementById('cycleDmg').innerText = Math.round(currentCycleDmg).toLocaleString();
+        document.getElementById('atkTotal').innerText = Math.round(atkCycle).toLocaleString();
+        document.getElementById('critTotal').innerText = Math.round(critCycle).toLocaleString();
+        document.getElementById('cycleDmg').innerText = Math.round(currentExp).toLocaleString();
         document.getElementById('totalHp').innerText = Math.round(hpTotal).toLocaleString();
 
-        // 图表同步：对比 怪物HP 与 你这3s一轮的爆发力
         chart.data.datasets[0].data = Array.from({length: 31}, (_, i) => getHP(i * 10) * N);
-        chart.data.datasets[1].data = Array(31).fill(currentCycleDmg);
+        chart.data.datasets[1].data = Array(31).fill(currentExp);
         chart.update('none');
     }
 
