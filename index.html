@@ -2,111 +2,122 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>怪物血量动态计算器</title>
+    <title>血月生存模拟器</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 15px; background: #fafafa; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .title { color: #333; margin-bottom: 20px; font-weight: bold; }
-        .display-box { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-family: monospace; }
-        .hp-text { font-size: 1.5em; color: #ff5252; }
-        input[type=range] { width: 100%; margin: 15px 0; cursor: pointer; }
-        canvas { max-height: 250px; }
+        body { font-family: sans-serif; background: #1a1a1a; color: #eee; padding: 20px; }
+        .panel { background: #2a2a2a; padding: 20px; border-radius: 15px; max-width: 800px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: #333; padding: 15px; border-radius: 10px; border-left: 5px solid #ff5252; }
+        .safe { border-left-color: #4caf50 !important; color: #4caf50; }
+        .danger { border-left-color: #ff5252 !important; color: #ff5252; }
+        input[type=range] { width: 100%; margin: 10px 0; }
+        label { font-size: 0.9em; color: #bbb; }
+        .value { font-weight: bold; color: #fff; float: right; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <div class="title">🩸 怪物血量 (HP) 实时模拟</div>
+<div class="panel">
+    <h2>🌙 血月生存数值模拟</h2>
     
-    <div class="display-box">
-        等级 (L): <span id="levelVal">0</span><br>
-        血量 (HP): <span id="hpVal" class="hp-text">3703</span>
+    <div class="grid">
+        <div>
+            <label>血月等级 (L): <span class="value" id="lText">0</span></label>
+            <input type="range" id="lSlider" min="0" max="300" value="0">
+            
+            <label>怪物数量 (N): <span class="value" id="nText">1</span></label>
+            <input type="range" id="nSlider" min="1" max="50" value="1">
+            
+            <label>玩家攻击力 (ATK): <span class="value" id="atkText">122</span></label>
+            <input type="range" id="atkSlider" min="100" max="50000" value="122">
+        </div>
+
+        <div id="statusCard" class="stat-card danger">
+            <div style="font-size: 0.9em;">生存状态预测:</div>
+            <div id="statusText" style="font-size: 1.4em; font-weight: bold; margin: 5px 0;">极度危险</div>
+            <div style="font-size: 0.85em; opacity: 0.8;">
+                建议最小攻击力: <span id="suggestAtk">0</span>
+            </div>
+        </div>
     </div>
 
-    <input type="range" id="levelSlider" min="0" max="300" value="0" step="1">
-
-    <canvas id="hpChart"></canvas>
+    <canvas id="mainChart" height="150"></canvas>
 </div>
 
 <script>
-    const ctx = document.getElementById('hpChart').getContext('2d');
-    const levelSlider = document.getElementById('levelSlider');
-    const levelVal = document.getElementById('levelVal');
-    const hpVal = document.getElementById('hpVal');
+    const lSlider = document.getElementById('lSlider');
+    const nSlider = document.getElementById('nSlider');
+    const atkSlider = document.getElementById('atkSlider');
+    const ctx = document.getElementById('mainChart').getContext('2d');
 
-    // --- 核心公式逻辑 ---
-    function calculateHP(L) {
-        L = parseFloat(L);
-        if (L <= 100) {
-            return 3703 + 24.57 * L;
-        } else if (L <= 200) {
-            return 6160 + 262.68 * (L - 100);
-        } else {
-            return 32428 + 383.48 * (L - 200);
-        }
+    function getMonsterHP(L) {
+        if (L <= 100) return 3703 + 24.57 * L;
+        if (L <= 200) return 6160 + 262.68 * (L - 100);
+        return 32428 + 383.48 * (L - 200);
     }
 
-    // 生成背景曲线的数据（0到300级，每隔5级取一个点）
-    const labels = [];
-    const curveData = [];
-    for (let i = 0; i <= 300; i += 5) {
-        labels.push(i);
-        curveData.push(calculateHP(i));
-    }
-
-    // 初始化图表
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: '当前位置',
-                    data: [{x: 0, y: 3703}], // 初始点
-                    backgroundColor: '#ff5252',
-                    pointRadius: 8,
-                    pointHoverRadius: 10,
-                    showLine: false,
-                    zIndex: 10
-                },
-                {
-                    label: 'HP 趋势',
-                    data: curveData,
-                    borderColor: '#ccc',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0.1
-                }
-            ]
+            labels: Array.from({length: 61}, (_, i) => i * 5),
+            datasets: [{
+                label: '当前压力点',
+                data: [],
+                pointRadius: 10,
+                backgroundColor: '#ff5252'
+            }, {
+                label: '怪物总血量曲线',
+                data: Array.from({length: 61}, (_, i) => getMonsterHP(i * 5)),
+                borderColor: '#555',
+                borderWidth: 1,
+                pointRadius: 0
+            }]
         },
         options: {
-            responsive: true,
-            scales: {
-                x: { type: 'linear', min: 0, max: 300, title: {display: true, text: '血月等级'} },
-                y: { title: {display: true, text: 'HP'} }
-            },
+            scales: { y: { display: false }, x: { grid: { display: false } } },
             plugins: { legend: { display: false } }
         }
     });
 
-    // 监听滑动条变化
-    levelSlider.addEventListener('input', function() {
-        const L = this.value;
-        const HP = calculateHP(L);
+    function update() {
+        const L = parseInt(lSlider.value);
+        const N = parseInt(nSlider.value);
+        const ATK = parseInt(atkSlider.value);
+        const HP = getMonsterHP(L);
+        const totalHP = HP * N;
+
+        // 核心逻辑计算
+        // 玩家存活时间 = 100 / (N * 30)
+        // 玩家杀怪所需攻击力 = 怪物总血量 / 玩家存活时间
+        const playerLifeTime = 100 / (N * 30);
+        const minRequiredAtk = Math.ceil(totalHP / playerLifeTime);
+        const isSafe = ATK >= minRequiredAtk;
+
+        // 更新 UI
+        document.getElementById('lText').innerText = L;
+        document.getElementById('nText').innerText = N;
+        document.getElementById('atkText').innerText = ATK;
+        document.getElementById('suggestAtk').innerText = minRequiredAtk.toLocaleString();
         
-        // 更新文字
-        levelVal.innerText = L;
-        hpVal.innerText = Math.round(HP).toLocaleString();
+        const card = document.getElementById('statusCard');
+        const stText = document.getElementById('statusText');
+        if (isSafe) {
+            card.className = "stat-card safe";
+            stText.innerText = "可以存活 ✅";
+        } else {
+            card.className = "stat-card danger";
+            stText.innerText = "无法生存 ❌";
+        }
 
-        // 更新图表上的红点
-        chart.data.datasets[0].data = [{ x: parseFloat(L), y: HP }];
-        chart.update('none'); // 'none' 表示不需要动画，追求实时感
-    });
+        // 更新图表
+        chart.data.datasets[0].data = [{x: L/5, y: HP}]; // 简化显示逻辑
+        chart.update('none');
+    }
+
+    [lSlider, nSlider, atkSlider].forEach(s => s.addEventListener('input', update));
+    update();
 </script>
-
 </body>
-
 </html>
+
