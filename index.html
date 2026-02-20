@@ -2,64 +2,80 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>数值膨胀生存模拟器</title>
+    <title>数值膨胀与生存预测</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 15px; border: 1px solid #333; }
-        .header { border-bottom: 2px solid #444; margin-bottom: 20px; padding-bottom: 10px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        .control-panel { background: #252525; padding: 20px; border-radius: 12px; }
-        .display-panel { background: #000; padding: 20px; border-radius: 12px; border-left: 6px solid #ff5252; }
-        input[type=range] { width: 100%; margin: 12px 0; accent-color: #00e5ff; }
-        .stat-line { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: monospace; }
-        .value { color: #00e5ff; font-weight: bold; }
-        .warning { color: #ff5252; }
-        .success { color: #00ff88; border-left-color: #00ff88 !important; }
-        canvas { margin-top: 20px; }
+        :root { --primary: #00e5ff; --danger: #ff5252; --bg: #121212; --card: #1e1e1e; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: #fff; padding: 20px; margin: 0; }
+        .container { max-width: 950px; margin: 0 auto; background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .grid { display: grid; grid-template-columns: 350px 1fr; gap: 25px; }
+        .panel { background: #252525; padding: 20px; border-radius: 12px; }
+        .stat-card { background: #000; padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); margin-bottom: 10px; }
+        input[type=range] { width: 100%; margin: 10px 0; accent-color: var(--primary); }
+        .value { float: right; color: var(--primary); font-family: monospace; font-weight: bold; }
+        .status-badge { display: block; padding: 10px; text-align: center; border-radius: 6px; font-weight: bold; margin-top: 15px; }
+        .safe { background: #1b4332; color: #74c69d; border: 1px solid #2d6a4f; }
+        .death { background: #431b1b; color: #ff8787; border: 1px solid #6a2d2d; }
+        canvas { margin-top: 20px; max-height: 300px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <h2>🌙 血月数值膨胀模拟器 (词缀累加模型)</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0;">⚔️ 数值膨胀模拟器 <small style="font-size:0.5em; color:#888;">(累加模型)</small></h2>
+        <div id="statusBadge" class="status-badge death">计算中...</div>
     </div>
 
     <div class="grid">
-        <div class="control-panel">
-            <label>血月等级 (L): <span id="lText" class="value">0</span></label>
+        <div class="panel">
+            <label>血月等级 (L): <span id="lVal" class="value">0</span></label>
             <input type="range" id="lSlider" min="0" max="300" value="0">
 
-            <label>怪物数量 (N): <span id="nText" class="value">1</span></label>
+            <label>怪物数量 (N): <span id="nVal" class="value">1</span></label>
             <input type="range" id="nSlider" min="1" max="50" value="1">
 
-            <label>词缀增伤累计 (%): <span id="bonusText" class="value">0</span></label>
-            <input type="range" id="bonusSlider" min="0" max="800" value="0" step="10">
-            
-            <p style="font-size: 0.8em; color: #888;">* 初始攻击: 122 | 局外基础: 30 | 满词缀: 800%</p>
+            <label>词缀增伤累计: <span id="bVal" class="value">0%</span></label>
+            <input type="range" id="bSlider" min="0" max="800" value="0" step="10">
+
+            <div style="margin-top:20px; font-size:0.85em; color:#aaa;">
+                <div style="margin-bottom:5px;">固定常数：</div>
+                • 局外基础伤害: 30<br>
+                • 局内初始伤害: 122<br>
+                • 玩家血量: 100 | 怪物攻击: 30
+            </div>
         </div>
 
-        <div id="statusBox" class="display-panel">
-            <div class="stat-line">局内总攻击力: <span id="atkInText">---</span></div>
-            <div class="stat-line">暴击伤害: <span id="critText">---</span></div>
-            <div class="stat-line">生存倒计时: <span id="timeText">---</span></div>
-            <hr style="border:0; border-top:1px solid #333;">
-            <div id="resultText" style="font-size: 1.4em; font-weight: bold; margin-top: 10px;">计算中...</div>
-            <div style="font-size: 0.85em; margin-top: 5px; opacity: 0.7;">建议词缀增伤至少需: <span id="reqBonus">---</span>%</div>
+        <div class="panel">
+            <div class="stat-card">
+                <div style="font-size:0.8em; color:#888;">局内攻击力 (ATK_in)</div>
+                <div id="atkIn" style="font-size:1.4em;">122</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #ff9f43;">
+                <div style="font-size:0.8em; color:#888;">暴击伤害 (Crit_Dmg)</div>
+                <div id="critDmg" style="font-size:1.4em;">214</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #ee5253;">
+                <div style="font-size:0.8em; color:#888;">生存倒计时 (T_die)</div>
+                <div id="tDie" style="font-size:1.4em;">3.33s</div>
+            </div>
+            
+            <div style="padding:10px; font-size:0.9em; color:#888;">
+                建议清场总输出需达到: <span id="reqDmg" style="color:#fff;">0</span>
+            </div>
         </div>
     </div>
 
-    <canvas id="growthChart" height="120"></canvas>
+    <canvas id="mainChart"></canvas>
 </div>
 
 <script>
     const lS = document.getElementById('lSlider');
     const nS = document.getElementById('nSlider');
-    const bS = document.getElementById('bonusSlider');
-    const ctx = document.getElementById('growthChart').getContext('2d');
+    const bS = document.getElementById('bSlider');
+    const ctx = document.getElementById('mainChart').getContext('2d');
 
-    function getMonsterHP(L) {
+    function getHP(L) {
         if (L <= 100) return 3703 + 24.57 * L;
         if (L <= 200) return 6160 + 262.68 * (L - 100);
         return 32428 + 383.48 * (L - 200);
@@ -70,17 +86,27 @@
         data: {
             labels: Array.from({length: 31}, (_, i) => i * 10),
             datasets: [{
-                label: '所需攻击力 (无限膨胀)',
+                label: '所需清场攻击力',
+                data: [],
+                borderColor: '#444',
+                borderWidth: 1,
+                pointRadius: 0,
+                fill: false
+            }, {
+                label: '你的攻击力',
                 data: [],
                 borderColor: '#00e5ff',
-                borderWidth: 2,
-                pointRadius: 0,
+                backgroundColor: 'rgba(0, 229, 255, 0.2)',
                 fill: true,
-                backgroundColor: 'rgba(0, 229, 255, 0.1)'
+                pointRadius: 0
             }]
         },
         options: {
-            scales: { y: { type: 'logarithmic', grid: { color: '#333' } }, x: { grid: { display: false } } },
+            responsive: true,
+            scales: {
+                y: { type: 'logarithmic', grid: { color: '#333' } },
+                x: { grid: { display: false } }
+            },
             plugins: { legend: { display: false } }
         }
     });
@@ -90,53 +116,51 @@
         const N = parseInt(nS.value);
         const bonus = parseInt(bS.value) / 100;
         
-        // 核心公式实现
+        // --- 核心计算 ---
         const atkOut = 30;
         const atkInit = 122;
+        // 局内攻击力 = 局外 + (初始 - 局外) * (1 + 增伤)
         const atkIn = atkOut + (atkInit - atkOut) * (1 + bonus);
-        const critDmg = 2 * atkIn - atkOut;
+        // 暴击伤害 = 2 * 局内 - 局外
+        const crit = 2 * atkIn - atkOut;
         
-        const mHP = getMonsterHP(L);
+        const mHP = getHP(L);
         const totalMHP = mHP * N;
-        const timeToDie = 100 / (N * 30);
+        const timeDie = 100 / (N * 30);
         
-        // 存活判定 (假设攻击频率为1，此处对比单次攻击强度)
-        const isSafe = (atkIn * 1) >= (totalMHP / timeToDie); 
+        // 判定：单位时间内的输出是否能清掉总血量
+        const isSafe = atkIn >= (totalMHP / timeDie);
 
-        // 更新UI
-        document.getElementById('lText').innerText = L;
-        document.getElementById('nText').innerText = N;
-        document.getElementById('bonusText').innerText = (bonus * 100).toFixed(0);
-        document.getElementById('atkInText').innerText = Math.floor(atkIn).toLocaleString();
-        document.getElementById('critText').innerText = Math.floor(critDmg).toLocaleString();
-        document.getElementById('timeText').innerText = timeToDie.toFixed(2) + "s";
-        
-        // 逆推所需词缀
-        const reqAtk = totalMHP / timeToDie;
-        const reqBonusVal = ((reqAtk - atkOut) / (atkInit - atkOut) - 1) * 100;
-        document.getElementById('reqBonus').innerText = reqBonusVal > 0 ? Math.ceil(reqBonusVal).toLocaleString() : "0";
+        // --- 更新 UI ---
+        document.getElementById('lVal').innerText = L;
+        document.getElementById('nVal').innerText = N;
+        document.getElementById('bVal').innerText = (bonus * 100) + "%";
+        document.getElementById('atkIn').innerText = Math.floor(atkIn).toLocaleString();
+        document.getElementById('critDmg').innerText = Math.floor(crit).toLocaleString();
+        document.getElementById('tDie').innerText = timeDie.toFixed(2) + "s";
+        document.getElementById('reqDmg').innerText = Math.ceil(totalMHP).toLocaleString();
 
-        const box = document.getElementById('statusBox');
-        const res = document.getElementById('resultText');
-        if (isSafe) {
-            box.className = "display-panel success";
-            res.innerText = "数值压制成功 ✅";
+        const badge = document.getElementById('statusBadge');
+        if(isSafe) {
+            badge.innerText = "数值压制：成功存活";
+            badge.className = "status-badge safe";
         } else {
-            box.className = "display-panel";
-            res.innerText = "数值不足，无法生存 ❌";
+            badge.innerText = "数值崩坏：无法生存";
+            badge.className = "status-badge death";
         }
 
-        // 更新图表趋势
-        chart.data.datasets[0].data = Array.from({length: 31}, (_, i) => {
-            const tempL = i * 10;
-            return (getMonsterHP(tempL) * N) / timeToDie;
-        });
+        // --- 更新图表 ---
+        const myAtkData = Array(31).fill(atkIn);
+        const reqAtkData = Array.from({length: 31}, (_, i) => (getHP(i * 10) * N) / timeDie);
+        
+        chart.data.datasets[0].data = reqAtkData;
+        chart.data.datasets[1].data = myAtkData;
         chart.update('none');
     }
 
-    [lS, nS, bS].forEach(s => s.addEventListener('input', update));
+    [lS, nS, bS].forEach(el => el.addEventListener('input', update));
     update();
 </script>
+
 </body>
 </html>
-
