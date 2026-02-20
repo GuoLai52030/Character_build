@@ -2,54 +2,62 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>血月生存模拟器</title>
+    <title>数值膨胀生存模拟器</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: #eee; padding: 20px; }
-        .panel { background: #2a2a2a; padding: 20px; border-radius: 15px; max-width: 800px; margin: 0 auto; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        .stat-card { background: #333; padding: 15px; border-radius: 10px; border-left: 5px solid #ff5252; }
-        .safe { border-left-color: #4caf50 !important; color: #4caf50; }
-        .danger { border-left-color: #ff5252 !important; color: #ff5252; }
-        input[type=range] { width: 100%; margin: 10px 0; }
-        label { font-size: 0.9em; color: #bbb; }
-        .value { font-weight: bold; color: #fff; float: right; }
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 15px; border: 1px solid #333; }
+        .header { border-bottom: 2px solid #444; margin-bottom: 20px; padding-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .control-panel { background: #252525; padding: 20px; border-radius: 12px; }
+        .display-panel { background: #000; padding: 20px; border-radius: 12px; border-left: 6px solid #ff5252; }
+        input[type=range] { width: 100%; margin: 12px 0; accent-color: #00e5ff; }
+        .stat-line { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: monospace; }
+        .value { color: #00e5ff; font-weight: bold; }
+        .warning { color: #ff5252; }
+        .success { color: #00ff88; border-left-color: #00ff88 !important; }
+        canvas { margin-top: 20px; }
     </style>
 </head>
 <body>
 
-<div class="panel">
-    <h2>🌙 血月生存数值模拟</h2>
-    
+<div class="container">
+    <div class="header">
+        <h2>🌙 血月数值膨胀模拟器 (词缀累加模型)</h2>
+    </div>
+
     <div class="grid">
-        <div>
-            <label>血月等级 (L): <span class="value" id="lText">0</span></label>
+        <div class="control-panel">
+            <label>血月等级 (L): <span id="lText" class="value">0</span></label>
             <input type="range" id="lSlider" min="0" max="300" value="0">
-            
-            <label>怪物数量 (N): <span class="value" id="nText">1</span></label>
+
+            <label>怪物数量 (N): <span id="nText" class="value">1</span></label>
             <input type="range" id="nSlider" min="1" max="50" value="1">
+
+            <label>词缀增伤累计 (%): <span id="bonusText" class="value">0</span></label>
+            <input type="range" id="bonusSlider" min="0" max="800" value="0" step="10">
             
-            <label>玩家攻击力 (ATK): <span class="value" id="atkText">122</span></label>
-            <input type="range" id="atkSlider" min="100" max="50000" value="122">
+            <p style="font-size: 0.8em; color: #888;">* 初始攻击: 122 | 局外基础: 30 | 满词缀: 800%</p>
         </div>
 
-        <div id="statusCard" class="stat-card danger">
-            <div style="font-size: 0.9em;">生存状态预测:</div>
-            <div id="statusText" style="font-size: 1.4em; font-weight: bold; margin: 5px 0;">极度危险</div>
-            <div style="font-size: 0.85em; opacity: 0.8;">
-                建议最小攻击力: <span id="suggestAtk">0</span>
-            </div>
+        <div id="statusBox" class="display-panel">
+            <div class="stat-line">局内总攻击力: <span id="atkInText">---</span></div>
+            <div class="stat-line">暴击伤害: <span id="critText">---</span></div>
+            <div class="stat-line">生存倒计时: <span id="timeText">---</span></div>
+            <hr style="border:0; border-top:1px solid #333;">
+            <div id="resultText" style="font-size: 1.4em; font-weight: bold; margin-top: 10px;">计算中...</div>
+            <div style="font-size: 0.85em; margin-top: 5px; opacity: 0.7;">建议词缀增伤至少需: <span id="reqBonus">---</span>%</div>
         </div>
     </div>
 
-    <canvas id="mainChart" height="150"></canvas>
+    <canvas id="growthChart" height="120"></canvas>
 </div>
 
 <script>
-    const lSlider = document.getElementById('lSlider');
-    const nSlider = document.getElementById('nSlider');
-    const atkSlider = document.getElementById('atkSlider');
-    const ctx = document.getElementById('mainChart').getContext('2d');
+    const lS = document.getElementById('lSlider');
+    const nS = document.getElementById('nSlider');
+    const bS = document.getElementById('bonusSlider');
+    const ctx = document.getElementById('growthChart').getContext('2d');
 
     function getMonsterHP(L) {
         if (L <= 100) return 3703 + 24.57 * L;
@@ -60,62 +68,73 @@
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: Array.from({length: 61}, (_, i) => i * 5),
+            labels: Array.from({length: 31}, (_, i) => i * 10),
             datasets: [{
-                label: '当前压力点',
+                label: '所需攻击力 (无限膨胀)',
                 data: [],
-                pointRadius: 10,
-                backgroundColor: '#ff5252'
-            }, {
-                label: '怪物总血量曲线',
-                data: Array.from({length: 61}, (_, i) => getMonsterHP(i * 5)),
-                borderColor: '#555',
-                borderWidth: 1,
-                pointRadius: 0
+                borderColor: '#00e5ff',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                backgroundColor: 'rgba(0, 229, 255, 0.1)'
             }]
         },
         options: {
-            scales: { y: { display: false }, x: { grid: { display: false } } },
+            scales: { y: { type: 'logarithmic', grid: { color: '#333' } }, x: { grid: { display: false } } },
             plugins: { legend: { display: false } }
         }
     });
 
     function update() {
-        const L = parseInt(lSlider.value);
-        const N = parseInt(nSlider.value);
-        const ATK = parseInt(atkSlider.value);
-        const HP = getMonsterHP(L);
-        const totalHP = HP * N;
+        const L = parseInt(lS.value);
+        const N = parseInt(nS.value);
+        const bonus = parseInt(bS.value) / 100;
+        
+        // 核心公式实现
+        const atkOut = 30;
+        const atkInit = 122;
+        const atkIn = atkOut + (atkInit - atkOut) * (1 + bonus);
+        const critDmg = 2 * atkIn - atkOut;
+        
+        const mHP = getMonsterHP(L);
+        const totalMHP = mHP * N;
+        const timeToDie = 100 / (N * 30);
+        
+        // 存活判定 (假设攻击频率为1，此处对比单次攻击强度)
+        const isSafe = (atkIn * 1) >= (totalMHP / timeToDie); 
 
-        // 核心逻辑计算
-        // 玩家存活时间 = 100 / (N * 30)
-        // 玩家杀怪所需攻击力 = 怪物总血量 / 玩家存活时间
-        const playerLifeTime = 100 / (N * 30);
-        const minRequiredAtk = Math.ceil(totalHP / playerLifeTime);
-        const isSafe = ATK >= minRequiredAtk;
-
-        // 更新 UI
+        // 更新UI
         document.getElementById('lText').innerText = L;
         document.getElementById('nText').innerText = N;
-        document.getElementById('atkText').innerText = ATK;
-        document.getElementById('suggestAtk').innerText = minRequiredAtk.toLocaleString();
+        document.getElementById('bonusText').innerText = (bonus * 100).toFixed(0);
+        document.getElementById('atkInText').innerText = Math.floor(atkIn).toLocaleString();
+        document.getElementById('critText').innerText = Math.floor(critDmg).toLocaleString();
+        document.getElementById('timeText').innerText = timeToDie.toFixed(2) + "s";
         
-        const card = document.getElementById('statusCard');
-        const stText = document.getElementById('statusText');
+        // 逆推所需词缀
+        const reqAtk = totalMHP / timeToDie;
+        const reqBonusVal = ((reqAtk - atkOut) / (atkInit - atkOut) - 1) * 100;
+        document.getElementById('reqBonus').innerText = reqBonusVal > 0 ? Math.ceil(reqBonusVal).toLocaleString() : "0";
+
+        const box = document.getElementById('statusBox');
+        const res = document.getElementById('resultText');
         if (isSafe) {
-            card.className = "stat-card safe";
-            stText.innerText = "可以存活 ✅";
+            box.className = "display-panel success";
+            res.innerText = "数值压制成功 ✅";
         } else {
-            card.className = "stat-card danger";
-            stText.innerText = "无法生存 ❌";
+            box.className = "display-panel";
+            res.innerText = "数值不足，无法生存 ❌";
         }
 
-        // 更新图表
-        chart.data.datasets[0].data = [{x: L/5, y: HP}]; // 简化显示逻辑
+        // 更新图表趋势
+        chart.data.datasets[0].data = Array.from({length: 31}, (_, i) => {
+            const tempL = i * 10;
+            return (getMonsterHP(tempL) * N) / timeToDie;
+        });
         chart.update('none');
     }
 
-    [lSlider, nSlider, atkSlider].forEach(s => s.addEventListener('input', update));
+    [lS, nS, bS].forEach(s => s.addEventListener('input', update));
     update();
 </script>
 </body>
